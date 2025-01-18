@@ -42,7 +42,6 @@ cron.schedule('0 0 * * *', () => {
   });
 });
 
-// API endpoint to transfer tokens based on wallet and carbon score
 app.post('/transfer-tokens', async (req, res) => {
   const { wallet, carbonScore } = req.body;
 
@@ -61,24 +60,29 @@ app.post('/transfer-tokens', async (req, res) => {
     // Get the distributor's associated token account
     const distributorTokenAccount = await getOrCreateAssociatedTokenAccount(connection, distributorKeypair, mintPublicKey, distributorKeypair.publicKey);
 
-    const transaction = new Transaction().add(
-      createTransferInstruction(
-        distributorTokenAccount.address,
-        recipientTokenAccount.address,
-        distributorKeypair.publicKey,
-        tokensToDistribute * 1e9 // Convert tokens to smallest unit
-      )
+    // Create the transfer instruction
+    const transferInstruction = createTransferInstruction(
+      distributorTokenAccount.address,
+      recipientTokenAccount.address,
+      distributorKeypair.publicKey,
+      tokensToDistribute * 1e9 // Convert tokens to smallest unit
     );
+
+    // Create a transaction and add the transfer instruction
+    const transaction = new Transaction().add(transferInstruction);
 
     // Send the transaction
     const signature = await connection.sendTransaction(transaction, [distributorKeypair]);
+
+    // Confirm the transaction
+    await connection.confirmTransaction(signature, 'confirmed');
 
     return res.status(200).json({
       message: 'Tokens transferred successfully',
       transaction: signature
     });
   } catch (error) {
-    console.error('Token transfer failed:', error.message);
+    console.error('Token transfer failed:', error); // Log the full error object
     return res.status(500).send('Error during token transfer');
   }
 });
