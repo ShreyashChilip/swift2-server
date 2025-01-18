@@ -1,5 +1,5 @@
 const { Connection, Keypair, PublicKey, Transaction, TOKEN_PROGRAM_ID } = require('@solana/web3.js');
-const { getOrCreateAssociatedTokenAccount, createTransferInstruction, Token } = require('@solana/spl-token');
+const { getOrCreateAssociatedTokenAccount, createTransferInstruction, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cron = require('node-cron');
@@ -50,28 +50,25 @@ app.post('/transfer-tokens', async (req, res) => {
 
   try {
     const mintPublicKey = new PublicKey(TOKEN_MINT_ADDRESS);
-    const token = new Token(
-      connection,
-      mintPublicKey,
-      TOKEN_PROGRAM_ID,
-      distributorKeypair // This is the payer account
-    );
-
-    const recipientWallet = new PublicKey(wallet);
     const tokensToDistribute = carbonScore * 10; // Adjust multiplier as needed
 
     // Get or create the recipient's associated token account
-    let recipientTokenAccount = await getOrCreateAssociatedTokenAccount(connection, distributorKeypair, mintPublicKey, recipientWallet);
+    const recipientWallet = new PublicKey(wallet);
+    const recipientTokenAccount = await getOrCreateAssociatedTokenAccount(connection, distributorKeypair, mintPublicKey, recipientWallet);
+
+    // Get the distributor's associated token account
+    const distributorTokenAccount = await getOrCreateAssociatedTokenAccount(connection, distributorKeypair, mintPublicKey, distributorKeypair.publicKey);
 
     const transaction = new Transaction().add(
       createTransferInstruction(
-        await getOrCreateAssociatedTokenAccount(connection, distributorKeypair, mintPublicKey, distributorKeypair.publicKey),
+        distributorTokenAccount.address,
         recipientTokenAccount.address,
         distributorKeypair.publicKey,
         tokensToDistribute * 1e9 // Convert tokens to smallest unit
       )
     );
 
+    // Send the transaction
     const signature = await connection.sendTransaction(transaction, [distributorKeypair]);
 
     return res.status(200).json({
