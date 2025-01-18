@@ -1,5 +1,5 @@
 const { Connection, Keypair, PublicKey, Transaction, TOKEN_PROGRAM_ID } = require('@solana/web3.js');
-const { Token } = require('@solana/spl-token');
+const { getOrCreateAssociatedTokenAccount, createTransferInstruction, Token } = require('@solana/spl-token');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cron = require('node-cron');
@@ -61,18 +61,13 @@ app.post('/transfer-tokens', async (req, res) => {
     const tokensToDistribute = carbonScore * 10; // Adjust multiplier as needed
 
     // Get or create the recipient's associated token account
-    let recipientTokenAccount = await token.getAssociatedAccountInfo(recipientWallet);
-    if (!recipientTokenAccount) {
-      recipientTokenAccount = await token.createAssociatedTokenAccount(recipientWallet);
-    }
+    let recipientTokenAccount = await getOrCreateAssociatedTokenAccount(connection, distributorKeypair, mintPublicKey, recipientWallet);
 
     const transaction = new Transaction().add(
-      Token.createTransferInstruction(
-        TOKEN_PROGRAM_ID,
-        await token.getOrCreateAssociatedAccountInfo(distributorKeypair.publicKey),
+      createTransferInstruction(
+        await getOrCreateAssociatedTokenAccount(connection, distributorKeypair, mintPublicKey, distributorKeypair.publicKey),
         recipientTokenAccount.address,
         distributorKeypair.publicKey,
-        [],
         tokensToDistribute * 1e9 // Convert tokens to smallest unit
       )
     );
