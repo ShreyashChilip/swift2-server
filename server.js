@@ -1,8 +1,7 @@
 const { Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js');
-const { createAssociatedTokenAccountIdempotent, createTransferInstruction, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
+const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createTransferInstruction, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
 const express = require('express');
 const bodyParser = require('body-parser');
-const cron = require('node-cron');
 
 const app = express();
 app.use(bodyParser.json());
@@ -32,6 +31,33 @@ app.post('/update-scores', (req, res) => {
   res.send('Scores updated successfully');
 });
 
+// Function to create ATA for a given wallet and mint
+async function createATA(connection, payer, mint, owner) {
+  try {
+    // Get the ATA address
+    let ata = await getAssociatedTokenAddress(mint, owner, false); // false: allow owner off curve
+    console.log(`ATA Address: ${ata.toBase58()}`);
+
+    // Prepare the transaction
+    let tx = new Transaction();
+    tx.add(
+      createAssociatedTokenAccountInstruction(
+        payer.publicKey, // payer (this is the one paying the transaction fees)
+        ata, // ATA address to be created
+        owner, // owner of the ATA
+        mint // mint address of the token
+      )
+    );
+
+    // Send the transaction
+    const signature = await connection.sendTransaction(tx, [payer]);
+    console.log(`Create ATA Transaction Hash: ${signature}`);
+    await connection.confirmTransaction(signature, 'confirmed');
+  } catch (error) {
+    console.error("Error creating ATA:", error);
+  }
+}
+
 // Function to distribute tokens
 async function distributeTokens() {
   try {
@@ -40,35 +66,26 @@ async function distributeTokens() {
         const mintPublicKey = new PublicKey(TOKEN_MINT_ADDRESS);
         const tokensToDistribute = carbonScore * 10;
 
-        // Ensure the recipient wallet exists and get or create the associated token account
         const recipientWallet = new PublicKey(wallet);
-        let recipientTokenAccount;
-        try {
-          recipientTokenAccount = await createAssociatedTokenAccountIdempotent(connection, distributorKeypair, mintPublicKey, recipientWallet);
-          console.log(`Recipient token account found or created: ${recipientTokenAccount.address}`);
-        } catch (error) {
-          console.error(`Failed to create/get recipient token account for ${wallet}:`, error);
-          continue; // Skip this user if we can't create their account
-        }
+        
+        // Ensure recipient's associated token account is created
+        await createATA(connection, distributorKeypair, mintPublicKey, recipientWallet);
 
-        // Ensure the distributor wallet's associated token account exists
-        let distributorTokenAccount;
-        try {
-          distributorTokenAccount = await createAssociatedTokenAccountIdempotent(connection, distributorKeypair, mintPublicKey, distributorKeypair.publicKey);
-          console.log(`Distributor token account found or created: ${distributorTokenAccount.address}`);
-        } catch (error) {
-          console.error(`Failed to create/get distributor's token account:`, error);
-          continue; // Skip this operation if we can't create the distributor's account
-        }
+        // Ensure distributor's associated token account is created
+        await createATA(connection, distributorKeypair, mintPublicKey, distributorKeypair.publicKey);
+
+        // Get the recipient's associated token account
+        const recipientTokenAccount = await getAssociatedTokenAddress(mintPublicKey, recipientWallet);
+
+        // Get the distributor's associated token account
+        const distributorTokenAccount = await getAssociatedTokenAddress(mintPublicKey, distributorKeypair.publicKey);
 
         // Create the transfer instruction
         const transferInstruction = createTransferInstruction(
-          distributorTokenAccount.address,
-          recipientTokenAccount.address,
-          distributorKeypair.publicKey,
-          tokensToDistribute * 1e9, // Convert to smallest unit (lamports)
-          [], // Optional multi-signers (if needed)
-          TOKEN_PROGRAM_ID // Ensure the correct program ID is passed here
+          distributorTokenAccount, // Source token account
+          recipientTokenAccount,    // Destination token account
+          distributorKeypair.publicKey, // Owner of source account
+          tokensToDistribute * 1e9 // Convert to smallest unit (lamports)
         );
 
         // Create and send the transaction
@@ -83,13 +100,6 @@ async function distributeTokens() {
     console.error('Error during token distribution:', error);
   }
 }
-
-// Schedule token distribution at midnight every day
-cron.schedule('0 0 * * *', () => {
-  distributeTokens().catch((error) => {
-    console.error('Error during token distribution:', error.message);
-  });
-});
 
 // API to transfer tokens
 app.post('/transfer-tokens', async (req, res) => {
@@ -106,28 +116,22 @@ app.post('/transfer-tokens', async (req, res) => {
     const recipientWallet = new PublicKey(wallet);
 
     // Ensure recipient's associated token account is created
-    const recipientTokenAccount = await createAssociatedTokenAccountIdempotent(
-      connection,
-      distributorKeypair,
-      mintPublicKey,
-      recipientWallet
-    );
+    await createATA(connection, distributorKeypair, mintPublicKey, recipientWallet);
 
     // Ensure distributor's associated token account is created
-    const distributorTokenAccount = await createAssociatedTokenAccountIdempotent(
-      connection,
-      distributorKeypair,
-      mintPublicKey,
-      distributorKeypair.publicKey
-    );
+    await createATA(connection, distributorKeypair, mintPublicKey, distributorKeypair.publicKey);
+
+    // Get the recipient's associated token account
+    const recipientTokenAccount = await getAssociatedTokenAddress(mintPublicKey, recipientWallet);
+
+    // Get the distributor's associated token account
+    const distributorTokenAccount = await getAssociatedTokenAddress(mintPublicKey, distributorKeypair.publicKey);
 
     const transferInstruction = createTransferInstruction(
-      distributorTokenAccount.address,
-      recipientTokenAccount.address,
-      distributorKeypair.publicKey,
-      tokensToDistribute * 1e9, // Convert to smallest unit (lamports)
-      [], // Optional multi-signers (if needed)
-      TOKEN_PROGRAM_ID // Ensure the correct program ID is passed here
+      distributorTokenAccount, // Source token account
+      recipientTokenAccount,    // Destination token account
+      distributorKeypair.publicKey, // Owner of source account
+      tokensToDistribute * 1e9 // Convert to smallest unit (lamports)
     );
 
     // Create and send the transaction
@@ -141,9 +145,6 @@ app.post('/transfer-tokens', async (req, res) => {
     });
   } catch (error) {
     console.error('Token transfer failed:', error);
-    if (error.logs) {
-      console.error('Transaction logs:', error.logs);
-    }
     return res.status(500).send('Error during token transfer');
   }
 });
