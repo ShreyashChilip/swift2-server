@@ -31,6 +31,7 @@ app.post('/update-scores', (req, res) => {
   res.send('Scores updated successfully');
 });
 
+// Function to create Associated Token Account (ATA)
 async function createATA(connection, payer, mint, owner) {
   try {
     // Get the ATA address
@@ -66,6 +67,7 @@ async function createATA(connection, payer, mint, owner) {
     throw error; // Rethrow error for further handling
   }
 }
+
 // Function to distribute tokens
 async function distributeTokens() {
   try {
