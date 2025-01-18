@@ -1,5 +1,5 @@
 const { Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js');
-const { createAssociatedTokenAccountIdempotent, createTransferInstruction, TOKEN_2022_PROGRAM_ID } = require('@solana/spl-token');
+const { createAssociatedTokenAccountIdempotent, createTransferInstruction, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cron = require('node-cron');
