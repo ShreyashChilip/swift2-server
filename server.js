@@ -1,5 +1,5 @@
 const { Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js');
-const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createTransferInstruction, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
+const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createTransferInstruction, TOKEN_2022_PROGRAM_ID } = require('@solana/spl-token');
 const express = require('express');
 const bodyParser = require('body-parser');
 
@@ -31,21 +31,28 @@ app.post('/update-scores', (req, res) => {
   res.send('Scores updated successfully');
 });
 
-// Function to create ATA for a given wallet and mint
 async function createATA(connection, payer, mint, owner) {
   try {
     // Get the ATA address
-    let ata = await getAssociatedTokenAddress(mint, owner, false); // false: allow owner off curve
+    let ata = await getAssociatedTokenAddress(mint, owner, false);
     console.log(`ATA Address: ${ata.toBase58()}`);
+
+    // Check if the ATA already exists
+    const accountInfo = await connection.getAccountInfo(ata);
+    if (accountInfo) {
+      console.log(`ATA already exists: ${ata.toBase58()}`);
+      return ata; // Return existing ATA
+    }
 
     // Prepare the transaction
     let tx = new Transaction();
     tx.add(
       createAssociatedTokenAccountInstruction(
-        payer.publicKey, // payer (this is the one paying the transaction fees)
+        payer.publicKey, // payer
         ata, // ATA address to be created
         owner, // owner of the ATA
-        mint // mint address of the token
+        mint, // mint address of the token
+        TOKEN_2022_PROGRAM_ID // Ensure the correct program ID is used
       )
     );
 
@@ -53,11 +60,12 @@ async function createATA(connection, payer, mint, owner) {
     const signature = await connection.sendTransaction(tx, [payer]);
     console.log(`Create ATA Transaction Hash: ${signature}`);
     await connection.confirmTransaction(signature, 'confirmed');
+    return ata; // Return newly created ATA
   } catch (error) {
     console.error("Error creating ATA:", error);
+    throw error; // Rethrow error for further handling
   }
 }
-
 // Function to distribute tokens
 async function distributeTokens() {
   try {
