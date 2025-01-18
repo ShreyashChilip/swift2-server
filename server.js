@@ -15,48 +15,6 @@ const TOKEN_MINT_ADDRESS = 'mnts9NMk2ZPtcUjtcRtHgXz2ungkrrCQzXsCFPTGTae';
 const DISTRIBUTOR_PRIVATE_KEY = [222,166,197,173,241,181,236,124,196,160,132,79,248,166,26,24,138,96,170,17,35,45,215,205,179,162,243,153,154,235,114,18,11,121,114,199,106,39,220,170,6,7,72,219,188,118,16,144,81,229,69,178,93,45,136,87,87,58,29,160,21,173,137,255];
 const distributorKeypair = Keypair.fromSecretKey(Uint8Array.from(DISTRIBUTOR_PRIVATE_KEY));
 
-// Example user data (replace with actual data)
-let userScores = [
-  { wallet: 'RECIPIENT_WALLET_1', carbonScore: 12 },
-  { wallet: 'RECIPIENT_WALLET_2', carbonScore: 18 },
-];
-
-// Function to distribute tokens
-async function distributeTokens() {
-  console.log('Starting token distribution...');
-
-  const mintPublicKey = new PublicKey(TOKEN_MINT_ADDRESS);
-  const token = new Token(connection, mintPublicKey, TOKEN_PROGRAM_ID, distributorKeypair);
-
-  for (const user of userScores) {
-    const recipientWallet = new PublicKey(user.wallet);
-    const carbonScore = user.carbonScore;
-
-    const tokensToDistribute = carbonScore * 10; // Example: 10 tokens per score
-
-    try {
-      const recipientTokenAccount = await token.getOrCreateAssociatedAccountInfo(recipientWallet);
-
-      const transaction = new Transaction().add(
-        Token.createTransferInstruction(
-          TOKEN_PROGRAM_ID,
-          await token.getOrCreateAssociatedAccountInfo(distributorKeypair.publicKey),
-          recipientTokenAccount.address,
-          distributorKeypair.publicKey,
-          [],
-          tokensToDistribute * 1e9 // Convert tokens to smallest unit (e.g., 1 token = 1e9 lamports)
-        )
-      );
-
-      const signature = await connection.sendTransaction(transaction, [distributorKeypair]);
-      console.log(`Distributed ${tokensToDistribute} tokens to ${user.wallet}`);
-      console.log(`Transaction Signature: ${signature}`);
-    } catch (error) {
-      console.error(`Failed to distribute tokens to ${user.wallet}: ${error.message}`);
-    }
-  }
-}
-
 // API to update user scores
 app.post('/update-scores', (req, res) => {
   const { scores } = req.body;
