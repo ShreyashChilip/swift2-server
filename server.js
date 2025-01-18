@@ -1,5 +1,5 @@
-const { Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js');
-const { Token, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
+const { Connection, Keypair, PublicKey, Transaction, TOKEN_PROGRAM_ID } = require('@solana/web3.js');
+const { Token } = require('@solana/spl-token');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cron = require('node-cron');
@@ -27,6 +27,12 @@ app.post('/update-scores', (req, res) => {
   res.send('Scores updated successfully');
 });
 
+// Dummy function to handle token distribution (replace with actual logic)
+async function distributeTokens() {
+  // Add your logic for distributing tokens periodically, if required.
+  console.log("Token distribution logic goes here.");
+}
+
 // Schedule token distribution at midnight every day
 cron.schedule('0 0 * * *', () => {
   distributeTokens().catch((error) => {
@@ -44,12 +50,21 @@ app.post('/transfer-tokens', async (req, res) => {
 
   try {
     const mintPublicKey = new PublicKey(TOKEN_MINT_ADDRESS);
-    const token = new Token(connection, mintPublicKey, TOKEN_PROGRAM_ID, distributorKeypair);
+    const token = new Token(
+      connection,
+      mintPublicKey,
+      TOKEN_PROGRAM_ID,
+      distributorKeypair // This is the payer account
+    );
 
     const recipientWallet = new PublicKey(wallet);
     const tokensToDistribute = carbonScore * 10; // Adjust multiplier as needed
 
-    const recipientTokenAccount = await token.getOrCreateAssociatedAccountInfo(recipientWallet);
+    // Get or create the recipient's associated token account
+    let recipientTokenAccount = await token.getAssociatedAccountInfo(recipientWallet);
+    if (!recipientTokenAccount) {
+      recipientTokenAccount = await token.createAssociatedTokenAccount(recipientWallet);
+    }
 
     const transaction = new Transaction().add(
       Token.createTransferInstruction(
