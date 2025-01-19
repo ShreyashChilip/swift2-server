@@ -16,15 +16,15 @@ const distributorKeypair = Keypair.fromSecretKey(Uint8Array.from(DISTRIBUTOR_PRI
 
 // API endpoint to transfer tokens
 app.post('/transfer-tokens', async (req, res) => {
-  const { wallet, multiplyingFactor } = req.body;
+  const { wallet, carbonScore } = req.body;
 
-  if (!wallet || !multiplyingFactor || multiplyingFactor <= 0) {
+  if (!wallet || !carbonScore || carbonScore <= 0) {
     return res.status(400).send('Invalid input: wallet address or multiplying factor is missing/invalid');
   }
 
   try {
     const mintPublicKey = new PublicKey(TOKEN_MINT_ADDRESS);
-    const tokensToDistribute = multiplyingFactor * 10; // Adjust multiplier as needed
+    const tokensToDistribute = carbonScore * 0.01; // Adjust multiplier as needed
 
     // Get or create the recipient's associated token account
     const recipientWallet = new PublicKey(wallet);
