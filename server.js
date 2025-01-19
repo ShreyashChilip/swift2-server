@@ -2,6 +2,7 @@ const { Connection, Keypair, PublicKey, Transaction } = require('@solana/web3.js
 const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createTransferInstruction, TOKEN_2022_PROGRAM_ID } = require('@solana/spl-token');
 const express = require('express');
 const bodyParser = require('body-parser');
+const CUSTOM_TOKEN_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 
 const app = express();
 app.use(bodyParser.json());
@@ -53,7 +54,7 @@ async function createATA(connection, payer, mint, owner) {
         ata, // ATA address to be created
         owner, // owner of the ATA
         mint, // mint address of the token
-        TOKEN_2022_PROGRAM_ID // Ensure the correct program ID is used
+        CUSTOM_TOKEN_PROGRAM_ID // Ensure the correct program ID is used
       )
     );
 
@@ -95,7 +96,9 @@ async function distributeTokens() {
           distributorTokenAccount, // Source token account
           recipientTokenAccount,    // Destination token account
           distributorKeypair.publicKey, // Owner of source account
-          tokensToDistribute * 1e9 // Convert to smallest unit (lamports)
+          tokensToDistribute * 1e9,
+          [],
+          CUSTOM_TOKEN_PROGRAM_ID // Convert to smallest unit (lamports)
         );
 
         // Create and send the transaction
@@ -141,7 +144,9 @@ app.post('/transfer-tokens', async (req, res) => {
       distributorTokenAccount, // Source token account
       recipientTokenAccount,    // Destination token account
       distributorKeypair.publicKey, // Owner of source account
-      tokensToDistribute * 1e9 // Convert to smallest unit (lamports)
+      tokensToDistribute * 1e9,
+      [],
+      CUSTOM_TOKEN_PROGRAM_ID // Convert to smallest unit (lamports)
     );
 
     // Create and send the transaction
